@@ -29,6 +29,7 @@ export const ICON_NAMES = [
   "logout",
   "menu",
   "menu_open",
+  "model_training",
   "monitoring",
   "neurology",
   "notifications_active",

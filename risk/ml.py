@@ -55,6 +55,40 @@ def extract_features(transaction, account=None) -> np.ndarray:
     return np.array([[amount, hour, day_of_week, amount_to_avg, z_score]], dtype=float)
 
 
+def load_bundle(model_path: Optional[str] = None) -> Optional[dict]:
+    """Load the full model bundle (model + metadata), or None if unavailable."""
+    if model_path is None:
+        model_path = getattr(settings, "ML_MODEL_PATH", None)
+    if not model_path or not Path(model_path).exists():
+        return None
+    try:
+        bundle = joblib.load(model_path)
+    except Exception as e:
+        logger.error("Failed to load ML model bundle from %s: %s", model_path, e)
+        return None
+    if isinstance(bundle, dict) and "model" in bundle:
+        return bundle
+    return {"model": bundle, "model_version": "unknown"}
+
+
+def isolation_score_from_decision(raw: np.ndarray) -> np.ndarray:
+    """
+    Map IsolationForest decision_function values to a 0..1 anomaly score.
+    raw >= 0.05 is a clear inlier (0.0); raw <= -0.15 a strong outlier (1.0).
+    """
+    return np.clip((0.05 - np.asarray(raw, dtype=float)) / 0.20, 0.0, 1.0)
+
+
+def ml_scores_batch(model: Any, X: np.ndarray) -> np.ndarray:
+    """Vectorised compute_ml_score for a feature matrix of shape (n, 5)."""
+    X = np.asarray(X, dtype=float)
+    if model is None or len(X) == 0:
+        return np.zeros(len(X))
+    if hasattr(model, "decision_function") and not hasattr(model, "predict_risk") and not hasattr(model, "predict_proba"):
+        return isolation_score_from_decision(model.decision_function(X))
+    return np.array([compute_ml_score(model, row.reshape(1, -1)) for row in X])
+
+
 def load_model(model_path: Optional[str] = None) -> Any:
     """
     Load the serialized model bundle from disk via joblib.
@@ -106,17 +140,7 @@ def compute_ml_score(model: Any, features: np.ndarray) -> float:
     # scikit-learn IsolationForest decision_function
     if hasattr(model, "decision_function") and callable(model.decision_function):
         raw = float(model.decision_function(features)[0])
-        # In scikit-learn Isolation Forest:
-        # raw >= 0.05 is normal (inlier) -> 0.0
-        # raw <= -0.15 is strong anomaly (outlier) -> 1.0
-        # Linear transition in between:
-        if raw >= 0.05:
-            return 0.0
-        elif raw <= -0.15:
-            return 1.0
-        else:
-            score = (0.05 - raw) / 0.20
-            return float(np.clip(score, 0.0, 1.0))
+        return float(isolation_score_from_decision(raw))
 
     # Direct callable (e.g. MagicMock return_value or custom function)
     if callable(model):

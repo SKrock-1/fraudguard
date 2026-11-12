@@ -19,6 +19,7 @@ const NAV: { href: string; label: string; icon: IconName; badge?: boolean }[] = 
   { href: "/", label: "Overview", icon: "space_dashboard" },
   { href: "/alerts", label: "Alerts", icon: "gpp_maybe", badge: true },
   { href: "/audit", label: "Audit", icon: "receipt_long" },
+  { href: "/models", label: "Models", icon: "monitoring" },
 ];
 
 const FAB_LAYOUT_ID = "simulate-fab";

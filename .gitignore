@@ -19,3 +19,7 @@ build/
 *.pdf
 node_modules/
 .next/
+
+# retrained models are produced at runtime, not committed
+risk/ml_models/*.previous.joblib
+risk/ml_models/*.joblib.tmp

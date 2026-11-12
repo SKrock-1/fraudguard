@@ -1,0 +1,63 @@
+name: Weekly model retrain
+
+# Render's free plan has no cron jobs, so GitHub Actions calls the admin
+# retrain endpoint on a schedule. Set these repository secrets first:
+#   FRAUDGUARD_API_URL        e.g. https://fraudguard-api.onrender.com
+#   FRAUDGUARD_ADMIN_USERNAME an account with the admin role
+#   FRAUDGUARD_ADMIN_PASSWORD
+on:
+  schedule:
+    - cron: "0 3 * * 1" # Mondays 03:00 UTC
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Promote even if the challenger does not beat the champion
+        type: boolean
+        default: false
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    env:
+      API: ${{ secrets.FRAUDGUARD_API_URL }}
+      USERNAME: ${{ secrets.FRAUDGUARD_ADMIN_USERNAME }}
+      PASSWORD: ${{ secrets.FRAUDGUARD_ADMIN_PASSWORD }}
+      FORCE: ${{ inputs.force || false }}
+    steps:
+      - name: Check configuration
+        id: cfg
+        run: |
+          if [ -z "$API" ] || [ -z "$USERNAME" ] || [ -z "$PASSWORD" ]; then
+            echo "Retrain secrets are not set; skipping." >> "$GITHUB_STEP_SUMMARY"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Wake the API (free tier sleeps when idle)
+        if: steps.cfg.outputs.ready == 'true'
+        run: |
+          for i in 1 2 3 4 5 6; do
+            curl -fsS --max-time 60 "$API/api/health/" && break
+            sleep 20
+          done
+
+      - name: Retrain
+        if: steps.cfg.outputs.ready == 'true'
+        run: |
+          TOKEN=$(curl -fsS -X POST "$API/api/auth/token/" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n --arg u "$USERNAME" --arg p "$PASSWORD" '{username:$u,password:$p}')" | jq -r .access)
+          echo "::add-mask::$TOKEN"
+          RESULT=$(curl -sS -X POST "$API/api/ml/retrain/" \
+            -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+            -d "{\"trigger\":\"scheduled\",\"force\":$FORCE}")
+          echo "$RESULT" | jq .
+          {
+            echo "### Retrain result"
+            echo '```json'
+            echo "$RESULT" | jq '{status, version, notes, labeled_fraud, labeled_legit, reason}'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          STATUS=$(echo "$RESULT" | jq -r .status)
+          case "$STATUS" in promoted|kept_champion|skipped) ;; *) exit 1 ;; esac

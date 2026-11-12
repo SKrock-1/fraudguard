@@ -351,3 +351,187 @@ export function Sparkline({ values, color = "var(--md-ext-series-1)", height = 3
     </div>
   );
 }
+
+/* ---------------------------- Threshold sweep ----------------------------- */
+
+export interface SweepPoint {
+  threshold: number;
+  precision: number;
+  recall: number;
+  f1: number;
+}
+
+const SWEEP_SERIES = [
+  { key: "precision", label: "Precision", color: "var(--md-ext-series-1)" },
+  { key: "recall", label: "Recall", color: "var(--md-ext-series-2)" },
+  { key: "f1", label: "F1", color: "var(--md-ext-series-3)" },
+] as const;
+
+export const SWEEP_LEGEND = SWEEP_SERIES.map((s) => ({ label: s.label, color: s.color, shape: "line" as const }));
+
+/** Precision, recall and F1 against the alert threshold, with the live threshold marked. */
+export function ThresholdChart({ points, current, height = 260 }: { points: SweepPoint[]; current: number; height?: number }) {
+  const [ref, { width }] = useElementSize<HTMLDivElement>();
+  const [hover, setHover] = useState<number | null>(null);
+  const pad = { top: 22, right: 16, bottom: 26, left: 36 };
+  const innerW = Math.max(0, width - pad.left - pad.right);
+  const innerH = height - pad.top - pad.bottom;
+  const x = (t: number) => pad.left + t * innerW;
+  const y = (v: number) => pad.top + innerH - v * innerH;
+
+  const lines = SWEEP_SERIES.map((s) => points.map((p, i) => `${i ? "L" : "M"}${x(p.threshold)},${y(p[s.key])}`).join(" "));
+
+  const onMove = (e: React.PointerEvent<SVGRectElement>) => {
+    const rect = (e.currentTarget as SVGRectElement).getBoundingClientRect();
+    const t = (e.clientX - rect.left) / rect.width;
+    let best = 0;
+    points.forEach((p, i) => {
+      if (Math.abs(p.threshold - t) < Math.abs(points[best].threshold - t)) best = i;
+    });
+    setHover(best);
+  };
+
+  const hp = hover !== null ? points[hover] : null;
+
+  return (
+    <div ref={ref} className="relative w-full" style={{ height }}>
+      {width > 0 && (
+        <svg width={width} height={height} className="overflow-visible" role="img" aria-label="Precision, recall and F1 by alert threshold">
+          {[0, 0.25, 0.5, 0.75, 1].map((v) => (
+            <g key={v}>
+              <line x1={pad.left} x2={width - pad.right} y1={y(v)} y2={y(v)} stroke={v === 0 ? "var(--md-sys-color-outline)" : "var(--md-sys-color-outline-variant)"} />
+              <text x={pad.left - 8} y={y(v)} dy="0.32em" textAnchor="end" className="fill-[var(--md-sys-color-on-surface-variant)] text-label-small tabular">
+                {v.toFixed(2)}
+              </text>
+            </g>
+          ))}
+          {[0, 0.25, 0.5, 0.75, 1].map((v) => (
+            <text key={v} x={x(v)} y={height - 6} textAnchor={v === 0 ? "start" : v === 1 ? "end" : "middle"} className="fill-[var(--md-sys-color-on-surface-variant)] text-label-small tabular">
+              {v.toFixed(2)}
+            </text>
+          ))}
+          <line x1={x(current)} x2={x(current)} y1={pad.top - 6} y2={pad.top + innerH} stroke="var(--md-sys-color-on-surface-variant)" strokeDasharray="3 3" />
+          <text x={x(current) + 6} y={pad.top - 8} className="fill-[var(--md-sys-color-on-surface-variant)] text-label-small font-medium">
+            Live threshold {current.toFixed(2)}
+          </text>
+          {lines.map((d, i) => (
+            <motion.path
+              key={SWEEP_SERIES[i].key}
+              d={d}
+              fill="none"
+              stroke={SWEEP_SERIES[i].color}
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              initial={{ pathLength: 0 }}
+              animate={{ pathLength: 1 }}
+              transition={{ duration: 0.8, delay: i * 0.08, ease: [0.2, 0.7, 0.2, 1] }}
+            />
+          ))}
+          {hp && (
+            <g>
+              <line x1={x(hp.threshold)} x2={x(hp.threshold)} y1={pad.top} y2={pad.top + innerH} stroke="var(--md-sys-color-outline)" />
+              {SWEEP_SERIES.map((s) => (
+                <circle key={s.key} cx={x(hp.threshold)} cy={y(hp[s.key])} r={4} fill={s.color} stroke="var(--md-sys-color-surface-container-highest)" strokeWidth={2} />
+              ))}
+            </g>
+          )}
+          <rect x={pad.left} y={pad.top} width={innerW} height={innerH} fill="transparent" onPointerMove={onMove} onPointerLeave={() => setHover(null)} />
+        </svg>
+      )}
+      {hp && (
+        <Tooltip x={x(hp.threshold)} y={pad.top + innerH / 2} width={width}>
+          <p className="mb-1.5 font-medium text-on-surface tabular">Threshold {hp.threshold.toFixed(2)}</p>
+          {SWEEP_SERIES.map((s) => (
+            <p key={s.key} className="flex items-center gap-2 text-on-surface-variant">
+              <span className="h-[2px] w-2.5 rounded-full" style={{ background: s.color }} />
+              {s.label}
+              <span className="ml-auto pl-4 font-medium tabular text-on-surface">{hp[s.key].toFixed(2)}</span>
+            </p>
+          ))}
+        </Tooltip>
+      )}
+    </div>
+  );
+}
+
+/* -------------------------- Labelled histogram ---------------------------- */
+
+/** Score distribution stacked by label (log scale), so the overlap between classes is visible. */
+export function LabelHistogram({
+  bins,
+  threshold,
+  height = 220,
+}: {
+  bins: { start: number; end: number; fraud: number; legit: number }[];
+  threshold: number;
+  height?: number;
+}) {
+  const [ref, { width }] = useElementSize<HTMLDivElement>();
+  const [hover, setHover] = useState<number | null>(null);
+  const pad = { top: 22, right: 16, bottom: 24, left: 16 };
+  const innerW = Math.max(0, width - pad.left - pad.right);
+  const innerH = height - pad.top - pad.bottom;
+  const max = Math.max(1, ...bins.map((b) => b.fraud + b.legit));
+  const scale = (v: number) => (v <= 0 ? 0 : Math.log1p(v) / Math.log1p(max));
+  const band = innerW / Math.max(1, bins.length);
+  const barW = Math.min(24, band - 2);
+  const tx = pad.left + threshold * innerW;
+  const base = pad.top + innerH;
+
+  return (
+    <div ref={ref} className="relative w-full" style={{ height }}>
+      {width > 0 && (
+        <svg width={width} height={height} role="img" aria-label="Score distribution of fraudulent and legitimate transactions">
+          {[0, 0.5, 1].map((f) => (
+            <line key={f} x1={pad.left} x2={width - pad.right} y1={pad.top + innerH * (1 - f)} y2={pad.top + innerH * (1 - f)} stroke={f === 0 ? "var(--md-sys-color-outline)" : "var(--md-sys-color-outline-variant)"} />
+          ))}
+          {bins.map((b, i) => {
+            const total = b.fraud + b.legit;
+            const h = scale(total) * innerH;
+            const fraudH = total ? (h * b.fraud) / total : 0;
+            const bx = pad.left + i * band + (band - barW) / 2;
+            return (
+              <g key={i} onPointerEnter={() => setHover(i)} onPointerLeave={() => setHover(null)} opacity={hover === null || hover === i ? 1 : 0.45}>
+                <rect x={pad.left + i * band} y={pad.top} width={band} height={innerH} fill="transparent" />
+                {h > 0 && (
+                  <motion.g
+                    style={{ transformOrigin: `0px ${base}px`, transformBox: "view-box" }}
+                    initial={{ scaleY: 0 }}
+                    animate={{ scaleY: 1 }}
+                    transition={{ duration: 0.5, delay: i * 0.015, ease: [0.2, 0.7, 0.2, 1] }}
+                  >
+                    {h - fraudH > 0 && <rect x={bx} y={base - (h - fraudH)} width={barW} height={h - fraudH} rx={2} fill="var(--md-ext-series-1)" />}
+                    {fraudH > 0 && <rect x={bx} y={base - h} width={barW} height={fraudH} rx={2} fill="var(--md-sys-color-error)" />}
+                  </motion.g>
+                )}
+              </g>
+            );
+          })}
+          <line x1={tx} x2={tx} y1={pad.top - 6} y2={pad.top + innerH} stroke="var(--md-sys-color-on-surface-variant)" strokeDasharray="3 3" />
+          <text x={tx + 6} y={pad.top - 8} className="fill-[var(--md-sys-color-on-surface-variant)] text-label-small font-medium">
+            Threshold {threshold.toFixed(2)}
+          </text>
+          {[0, 0.25, 0.5, 0.75, 1].map((v) => (
+            <text key={v} x={pad.left + v * innerW} y={height - 6} textAnchor={v === 0 ? "start" : v === 1 ? "end" : "middle"} className="fill-[var(--md-sys-color-on-surface-variant)] text-label-small tabular">
+              {v.toFixed(2)}
+            </text>
+          ))}
+        </svg>
+      )}
+      {hover !== null && bins[hover] && (
+        <Tooltip x={pad.left + (hover + 0.5) * band} y={height / 2} width={width}>
+          <p className="font-medium text-on-surface tabular">
+            Score {bins[hover].start.toFixed(2)}–{bins[hover].end.toFixed(2)}
+          </p>
+          <p className="mt-1 flex text-on-surface-variant">
+            Fraud <span className="ml-auto pl-4 font-medium tabular text-on-surface">{count(bins[hover].fraud)}</span>
+          </p>
+          <p className="flex text-on-surface-variant">
+            Legitimate <span className="ml-auto pl-4 font-medium tabular text-on-surface">{count(bins[hover].legit)}</span>
+          </p>
+        </Tooltip>
+      )}
+    </div>
+  );
+}

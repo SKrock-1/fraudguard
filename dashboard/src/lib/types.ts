@@ -102,3 +102,74 @@ export interface AuditEntry {
   payload: Record<string, unknown>;
   timestamp: string;
 }
+
+export interface ThresholdMetrics {
+  threshold: number;
+  tp: number;
+  fp: number;
+  fn: number;
+  tn: number;
+  precision: number;
+  recall: number;
+  f1: number;
+  accuracy: number;
+}
+
+export interface BacktestResult {
+  source: "analyst" | "synthetic";
+  samples: number;
+  fraud?: number;
+  legit?: number;
+  reviewed?: number;
+  average_precision?: number | null;
+  current_threshold?: number;
+  current?: ThresholdMetrics;
+  best_f1?: ThresholdMetrics;
+  thresholds?: ThresholdMetrics[];
+  histogram?: { start: number; end: number; fraud: number; legit: number }[];
+  note: string;
+}
+
+export interface ModelEval {
+  average_precision: number;
+  precision: number;
+  recall: number;
+  roc_auc: number | null;
+}
+
+export interface ModelRun {
+  id: number;
+  version: string;
+  trained_at: string;
+  trigger: "manual" | "api" | "scheduled";
+  promoted: boolean;
+  train_samples: number;
+  labeled_fraud: number;
+  labeled_legit: number;
+  contamination: number;
+  metrics: {
+    holdout_size: number;
+    holdout_fraud: number;
+    challenger: ModelEval;
+    champion: ModelEval | null;
+    champion_version: string | null;
+    challenger_beats_champion: boolean;
+  };
+  notes: string;
+  created_by: string | null;
+}
+
+export interface ModelList {
+  production_version: string | null;
+  runs: ModelRun[];
+}
+
+export interface RetrainResult {
+  status: "promoted" | "kept_champion" | "skipped" | "dry_run";
+  version?: string;
+  notes?: string;
+  reason?: string;
+  samples: number;
+  labeled_fraud: number;
+  labeled_legit: number;
+}

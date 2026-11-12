@@ -1,12 +1,97 @@
 import logging
 from celery import shared_task
 from django.db import transaction as db_transaction
-from risk.ml import load_model, ml_score
+import os
+import time
+
+from risk.ml import extract_features, load_bundle, ml_score
 
 logger = logging.getLogger(__name__)
 
-# Loaded once at process start (module-level, not inside the task function)
-ML_MODEL = load_model()
+# Loaded once at process start (module-level, not inside the task function).
+# Retrained models are stored in the database; refresh_model() picks up a newer
+# promoted one (or a replaced baseline file) at most every 30 seconds.
+_BUNDLE = load_bundle()
+ML_MODEL = _BUNDLE["model"] if _BUNDLE else None
+ML_MODEL_VERSION = (_BUNDLE or {}).get("model_version", "isolation_forest_v1")
+_MODEL_FILE_STATE = {"key": None, "checked_at": 0.0}
+MODEL_RECHECK_SECONDS = 30.0
+
+
+def _model_file_key():
+    from django.conf import settings
+    path = getattr(settings, "ML_MODEL_PATH", None)
+    try:
+        return (path, os.stat(path).st_mtime_ns) if path else None
+    except OSError:
+        return (path, None)
+
+
+def install_model(model, version):
+    """Swap the in-process model (used after a retrain is promoted)."""
+    global ML_MODEL, ML_MODEL_VERSION
+    ML_MODEL = model
+    ML_MODEL_VERSION = version
+    _MODEL_FILE_STATE["key"] = _model_file_key()
+    _MODEL_FILE_STATE["checked_at"] = time.monotonic()
+
+
+def _latest_promoted():
+    """(version, artifact bytes) of the newest promoted model stored in the DB."""
+    from django.db import DatabaseError
+    from risk.models import ModelVersion
+    try:
+        row = (
+            ModelVersion.objects.filter(promoted=True, artifact__isnull=False)
+            .order_by("-trained_at", "-id")
+            .values_list("version", flat=True)
+            .first()
+        )
+        if not row or row == ML_MODEL_VERSION:
+            return row, None
+        art = ModelVersion.objects.filter(version=row).values_list("artifact", flat=True).first()
+        return row, bytes(art) if art else None
+    except DatabaseError:
+        return None, None
+
+
+def refresh_model(force=False):
+    """
+    Keep the in-process model current, checking at most every 30 seconds:
+    1. a newer promoted model in the database (from retraining) wins;
+    2. otherwise reload the baseline file if it changed on disk.
+    """
+    now = time.monotonic()
+    if not force and now - _MODEL_FILE_STATE["checked_at"] < MODEL_RECHECK_SECONDS:
+        return
+    _MODEL_FILE_STATE["checked_at"] = now
+
+    version, artifact = _latest_promoted()
+    if artifact:
+        import io
+        import joblib
+        try:
+            bundle = joblib.load(io.BytesIO(artifact))
+            install_model(bundle["model"], bundle.get("model_version", version))
+            logger.info("Loaded promoted ML model %s from the database", version)
+        except Exception as e:  # a corrupt artifact must not stop scoring
+            logger.error("Could not load promoted model %s: %s", version, e)
+        return
+    if version:
+        return  # already running the newest promoted model
+
+    key = _model_file_key()
+    if _MODEL_FILE_STATE["key"] is None:
+        _MODEL_FILE_STATE["key"] = key
+        return
+    if key != _MODEL_FILE_STATE["key"]:
+        bundle = load_bundle()
+        if bundle:
+            install_model(bundle["model"], bundle.get("model_version", "unknown"))
+            logger.info("Reloaded ML model %s from disk", ML_MODEL_VERSION)
+        else:
+            _MODEL_FILE_STATE["key"] = key
+
 
 RULE_WEIGHTS = {
     "velocity": 0.30,
@@ -62,7 +147,9 @@ def score_transaction(self, transaction_id: int) -> dict:
     # Step 1: Run deterministic rule engine
     rule_results = evaluate_rules(account, txn)
 
-    # Step 2: Run ML anomaly scorer
+    # Step 2: Run ML anomaly scorer (features are kept for later retraining)
+    refresh_model()
+    ml_features = [round(float(v), 6) for v in extract_features(txn, account=account)[0]]
     ml_score_val = ml_score(txn, account=account, model=ML_MODEL)
     ml_contribution = round(ml_score_val * ML_WEIGHT, 4)
 
@@ -95,10 +182,11 @@ def score_transaction(self, transaction_id: int) -> dict:
         "triggered_rules": rule_results["triggered_rules"],
         "ml_score": ml_score_val,
         "ml_contribution": ml_contribution,
+        "ml_features": ml_features,
         "composite_breakdown": breakdown,
     }
 
-    model_version = "rules_v1+isoforest_v1" if ML_MODEL is not None else "rules_v1"
+    model_version = f"rules_v1+{ML_MODEL_VERSION}" if ML_MODEL is not None else "rules_v1"
 
     # Step 5: Persist atomically
     with db_transaction.atomic():
@@ -193,3 +281,10 @@ def score_transaction(self, transaction_id: int) -> dict:
         "alert_id": alert_id,
         "alert_created": alert_created,
     }
+
+
+@shared_task(name="risk.retrain_model")
+def retrain_model_task(trigger: str = "scheduled", force: bool = False) -> dict:
+    """Celery entry point for retraining the ML model from analyst labels."""
+    from risk.retraining import retrain
+    return retrain(trigger=trigger, force=force)

@@ -40,7 +40,7 @@ export function AuditView() {
     <div className="pb-10">
       <PageHeader
         title="Audit trail"
-        description="Every analyst decision, newest first. Database triggers make these records insert-only."
+        description="Every analyst decision and model change, newest first. Database triggers make these records insert-only."
         actions={
           <span className="inline-flex h-8 items-center gap-2 rounded-sm bg-tertiary-container px-3 text-label-large text-on-tertiary-container">
             <Icon name="lock" filled size={18} /> Immutable
@@ -87,9 +87,17 @@ export function AuditView() {
 }
 
 function AuditItem({ entry: e, expanded, onToggle }: { entry: AuditEntry; expanded: boolean; onToggle: () => void }) {
+  const model = e.action.startsWith("model_");
   const fraud = e.action.endsWith("rejected");
   const p = e.payload as Record<string, string | number | boolean | undefined>;
   const alertId = e.target.startsWith("Alert:") ? e.target.slice(6) : null;
+  const title = model
+    ? e.action === "model_promoted"
+      ? "Model promoted"
+      : "Model retrained, kept current"
+    : fraud
+      ? "Fraud confirmed"
+      : "Approved";
 
   return (
     <li className={cn("rounded-md transition-colors duration-300", expanded && "bg-surface-container-high")}>
@@ -102,14 +110,18 @@ function AuditItem({ entry: e, expanded, onToggle }: { entry: AuditEntry; expand
         <span
           className={cn(
             "flex size-10 shrink-0 items-center justify-center rounded-full",
-            fraud ? "bg-error-container text-on-error-container" : "bg-success-container text-on-success-container",
+            model
+              ? "bg-tertiary-container text-on-tertiary-container"
+              : fraud
+                ? "bg-error-container text-on-error-container"
+                : "bg-success-container text-on-success-container",
           )}
         >
-          <Icon name={fraud ? "block" : "check_circle"} filled size={20} />
+          <Icon name={model ? "model_training" : fraud ? "block" : "check_circle"} filled size={20} />
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-body-large text-on-surface">
-            {fraud ? "Fraud confirmed" : "Approved"}
+            {title}
             {p.amount && <span className="text-on-surface-variant tabular"> · {money(String(p.amount))}</span>}
           </p>
           <p className="flex items-center gap-1.5 truncate text-body-medium text-on-surface-variant">
@@ -147,10 +159,18 @@ function AuditItem({ entry: e, expanded, onToggle }: { entry: AuditEntry; expand
                     {displayName(e.actor_username)}
                   </span>
                 )}
-                <span>
-                  {String(p.previous_status)} → <span className="text-on-surface">{String(p.new_status)}</span>
-                </span>
-                <span className="tabular">score {Number(p.composite_score ?? 0).toFixed(2)}</span>
+                {model ? (
+                  <span className="tabular">
+                    {String(p.labeled_fraud)} fraud / {String(p.labeled_legit)} approved labels
+                  </span>
+                ) : (
+                  <>
+                    <span>
+                      {String(p.previous_status)} → <span className="text-on-surface">{String(p.new_status)}</span>
+                    </span>
+                    <span className="tabular">score {Number(p.composite_score ?? 0).toFixed(2)}</span>
+                  </>
+                )}
                 <span className="tabular">{dateTime(e.timestamp)}</span>
                 {alertId && (
                   <Link

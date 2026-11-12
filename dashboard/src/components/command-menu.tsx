@@ -71,6 +71,7 @@ function CommandPalette({ onClose, onSimulate }: { onClose: () => void; onSimula
       { id: "nav-overview", group: "Navigate", label: "Overview", icon: "space_dashboard", keywords: "home dashboard", run: go(() => router.push("/")) },
       { id: "nav-alerts", group: "Navigate", label: "Alert queue", icon: "gpp_maybe", keywords: "review pending", run: go(() => router.push("/alerts")) },
       { id: "nav-audit", group: "Navigate", label: "Audit trail", icon: "receipt_long", keywords: "log history decisions", run: go(() => router.push("/audit")) },
+      { id: "nav-models", group: "Navigate", label: "Model performance", icon: "monitoring", keywords: "ml backtest precision recall retrain", run: go(() => router.push("/models")) },
       ...(onSimulate
         ? [{ id: "act-sim", group: "Actions", label: "Simulate live traffic", icon: "bolt", keywords: "demo stream", run: go(onSimulate) } satisfies Command]
         : []),
