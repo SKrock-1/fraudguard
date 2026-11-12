@@ -1,3 +1,4 @@
+import math
 from decimal import Decimal
 from django.contrib.auth.models import AbstractUser
 from django.db import models
@@ -96,11 +97,19 @@ class Account(models.Model):
         m2 = float(self.spend_stddev) ** 2 * prior_count
 
         n = prior_count + 1
-        new_mean = mean + (amount - mean) / n
-        m2 += (amount - mean) * (amount - new_mean)
+        if n == 1:
+            # First transaction: the mean is the amount itself. Computing it as
+            # mean + (amount - mean) leaves float residue (6.440000000000026), and
+            # the product below then goes slightly negative.
+            new_mean, m2 = amount, 0.0
+        else:
+            new_mean = mean + (amount - mean) / n
+            m2 += (amount - mean) * (amount - new_mean)
+        # Rounding can still leave m2 a hair below zero; variance is never negative
+        variance = max(m2 / n, 0.0)
 
         self.avg_spend = Decimal(str(round(new_mean, 2)))
-        self.spend_stddev = Decimal(str(round((m2 / n) ** 0.5, 2)))
+        self.spend_stddev = Decimal(str(round(math.sqrt(variance), 2)))
 
         # Ignore out-of-order events so a late-arriving old transaction can't
         # rewind the location baseline used by the impossible-travel rule.
