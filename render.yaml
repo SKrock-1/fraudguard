@@ -1,0 +1,25 @@
+# Render Blueprint: one free web service running Daphne + Celery (see start.sh).
+# Postgres comes from Neon and Redis from Upstash; set those URLs in the dashboard.
+services:
+  - type: web
+    name: fraudguard
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health/
+    envVars:
+      - key: DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALLOWED_HOSTS
+        sync: false
+      - key: CSRF_TRUSTED_ORIGINS
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: CELERY_TASK_ALWAYS_EAGER
+        value: "False"
+      - key: CELERY_CONCURRENCY
+        value: "1"

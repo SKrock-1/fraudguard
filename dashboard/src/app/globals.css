@@ -1,0 +1,478 @@
+@import "tailwindcss";
+@import "./m3-tokens.css";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ───────────────────────────── Window size classes ─────────────────────────────
+   M3 breakpoints: compact <600, medium 600–839, expanded 840–1199,
+   large 1200–1599, extra-large ≥1600. */
+@theme {
+  --breakpoint-medium: 37.5rem;
+  --breakpoint-expanded: 52.5rem;
+  --breakpoint-large: 75rem;
+  --breakpoint-xlarge: 100rem;
+}
+
+/* ─────────────────────────────── Static sys tokens ─────────────────────────────── */
+:root {
+  color-scheme: light;
+
+  /* Shape scale */
+  --md-sys-shape-corner-none: 0px;
+  --md-sys-shape-corner-extra-small: 4px;
+  --md-sys-shape-corner-small: 8px;
+  --md-sys-shape-corner-medium: 12px;
+  --md-sys-shape-corner-large: 16px;
+  --md-sys-shape-corner-large-increased: 20px;
+  --md-sys-shape-corner-extra-large: 28px;
+  --md-sys-shape-corner-extra-large-increased: 32px;
+  --md-sys-shape-corner-extra-extra-large: 48px;
+  --md-sys-shape-corner-full: 9999px;
+
+  /* State layer opacities */
+  --md-sys-state-hover-opacity: 0.08;
+  --md-sys-state-focus-opacity: 0.1;
+  --md-sys-state-pressed-opacity: 0.1;
+  --md-sys-state-dragged-opacity: 0.16;
+
+  /* Motion: easing + duration tokens for effects (opacity, color) */
+  --md-sys-motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --md-sys-motion-easing-emphasized-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --md-sys-motion-easing-emphasized-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --md-sys-motion-duration-short2: 100ms;
+  --md-sys-motion-duration-short4: 200ms;
+  --md-sys-motion-duration-medium2: 300ms;
+  --md-sys-motion-duration-medium4: 400ms;
+
+  /* Motion: M3 Expressive spatial springs (ζ, k) rendered as CSS linear().
+     fast (0.6, 800) · default (0.8, 380) · slow (0.8, 200). Mirrored in src/lib/motion.ts */
+  --md-sys-motion-spring-fast-spatial-duration: 421ms;
+  --md-sys-motion-spring-fast-spatial: linear(0, 0.063, 0.2059, 0.3841, 0.5788, 0.7401, 0.8716, 0.9696, 1.0355, 1.0736, 1.0905, 1.09, 1.0799, 1.0647, 1.0479, 1.0319, 1.0173, 1.0068, 0.9993, 0.9947, 0.9923, 0.9916, 0.9921, 0.9933, 0.9949, 0.9964, 0.9977, 0.9989, 0.9997, 1.0003, 1.0006, 1.0008, 1);
+  --md-sys-motion-spring-default-spatial-duration: 461ms;
+  --md-sys-motion-spring-default-spatial: linear(0, 0.0348, 0.1226, 0.2294, 0.3529, 0.4663, 0.5715, 0.6712, 0.7506, 0.8209, 0.8736, 0.9151, 0.9488, 0.9719, 0.9894, 1.0004, 1.0078, 1.0117, 1.0135, 1.0138, 1.0131, 1.0117, 1.0102, 1.0086, 1.007, 1.0056, 1.0042, 1.0032, 1.0023, 1.0016, 1.001, 1.0006, 1);
+
+  /* Elevation levels 0–5 */
+  --md-sys-elevation-0: none;
+  --md-sys-elevation-1: 0 1px 2px 0 rgb(0 0 0 / 0.3), 0 1px 3px 1px rgb(0 0 0 / 0.15);
+  --md-sys-elevation-2: 0 1px 2px 0 rgb(0 0 0 / 0.3), 0 2px 6px 2px rgb(0 0 0 / 0.15);
+  --md-sys-elevation-3: 0 1px 3px 0 rgb(0 0 0 / 0.3), 0 4px 8px 3px rgb(0 0 0 / 0.15);
+  --md-sys-elevation-4: 0 2px 3px 0 rgb(0 0 0 / 0.3), 0 6px 10px 4px rgb(0 0 0 / 0.15);
+  --md-sys-elevation-5: 0 4px 4px 0 rgb(0 0 0 / 0.3), 0 8px 12px 6px rgb(0 0 0 / 0.15);
+
+  /* Aliases used by the command menu: M3 menus and search views sit on
+     surface-container-high, separated by outline-variant */
+  --app-page: var(--md-sys-color-surface);
+  --app-card: var(--md-sys-color-surface-container-high);
+  --app-hairline: var(--md-sys-color-outline-variant);
+
+  /* Layout grid: compact */
+  --md-layout-margin: 16px;
+  --md-layout-gutter: 16px;
+  --md-layout-columns: 4;
+
+  /* Data-viz categorical slots (validated with the dataviz palette checker against the
+     surface-container-highest card tone: ≥3:1 contrast in both modes). */
+  --md-ext-series-1: #2a78d6;
+  --md-ext-series-2: #cc5a22;
+  --md-ext-series-3: #13875f;
+  --md-ext-series-4: #a86f00;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --md-ext-series-1: #3987e5;
+  --md-ext-series-2: #d95926;
+  --md-ext-series-3: #199e70;
+  --md-ext-series-4: #c98500;
+}
+
+@media (min-width: 600px) {
+  :root {
+    --md-layout-margin: 24px;
+    --md-layout-gutter: 24px;
+    --md-layout-columns: 8;
+  }
+}
+@media (min-width: 840px) {
+  :root {
+    --md-layout-columns: 12;
+  }
+}
+@media (min-width: 1600px) {
+  :root {
+    --md-layout-margin: 32px;
+  }
+}
+
+/* ──────────────────────────── Tailwind theme mapping ──────────────────────────── */
+@theme inline {
+  --color-primary: var(--md-sys-color-primary);
+  --color-on-primary: var(--md-sys-color-on-primary);
+  --color-primary-container: var(--md-sys-color-primary-container);
+  --color-on-primary-container: var(--md-sys-color-on-primary-container);
+  --color-inverse-primary: var(--md-sys-color-inverse-primary);
+  --color-secondary: var(--md-sys-color-secondary);
+  --color-on-secondary: var(--md-sys-color-on-secondary);
+  --color-secondary-container: var(--md-sys-color-secondary-container);
+  --color-on-secondary-container: var(--md-sys-color-on-secondary-container);
+  --color-tertiary: var(--md-sys-color-tertiary);
+  --color-on-tertiary: var(--md-sys-color-on-tertiary);
+  --color-tertiary-container: var(--md-sys-color-tertiary-container);
+  --color-on-tertiary-container: var(--md-sys-color-on-tertiary-container);
+  --color-error: var(--md-sys-color-error);
+  --color-on-error: var(--md-sys-color-on-error);
+  --color-error-container: var(--md-sys-color-error-container);
+  --color-on-error-container: var(--md-sys-color-on-error-container);
+  --color-surface: var(--md-sys-color-surface);
+  --color-surface-dim: var(--md-sys-color-surface-dim);
+  --color-surface-bright: var(--md-sys-color-surface-bright);
+  --color-surface-container-lowest: var(--md-sys-color-surface-container-lowest);
+  --color-surface-container-low: var(--md-sys-color-surface-container-low);
+  --color-surface-container: var(--md-sys-color-surface-container);
+  --color-surface-container-high: var(--md-sys-color-surface-container-high);
+  --color-surface-container-highest: var(--md-sys-color-surface-container-highest);
+  --color-surface-variant: var(--md-sys-color-surface-variant);
+  --color-on-surface: var(--md-sys-color-on-surface);
+  --color-on-surface-variant: var(--md-sys-color-on-surface-variant);
+  --color-inverse-surface: var(--md-sys-color-inverse-surface);
+  --color-inverse-on-surface: var(--md-sys-color-inverse-on-surface);
+  --color-outline: var(--md-sys-color-outline);
+  --color-outline-variant: var(--md-sys-color-outline-variant);
+  --color-scrim: var(--md-sys-color-scrim);
+  --color-page: var(--app-page);
+  --color-card: var(--app-card);
+  --color-hairline: var(--app-hairline);
+
+  --color-success: var(--md-ext-color-success);
+  --color-on-success: var(--md-ext-color-on-success);
+  --color-success-container: var(--md-ext-color-success-container);
+  --color-on-success-container: var(--md-ext-color-on-success-container);
+  --color-warning: var(--md-ext-color-warning);
+  --color-on-warning: var(--md-ext-color-on-warning);
+  --color-warning-container: var(--md-ext-color-warning-container);
+  --color-on-warning-container: var(--md-ext-color-on-warning-container);
+  --color-serious: var(--md-ext-color-serious);
+  --color-on-serious: var(--md-ext-color-on-serious);
+  --color-serious-container: var(--md-ext-color-serious-container);
+  --color-on-serious-container: var(--md-ext-color-on-serious-container);
+
+  --radius-xs: var(--md-sys-shape-corner-extra-small);
+  --radius-sm: var(--md-sys-shape-corner-small);
+  --radius-md: var(--md-sys-shape-corner-medium);
+  --radius-lg: var(--md-sys-shape-corner-large);
+  --radius-lg-inc: var(--md-sys-shape-corner-large-increased);
+  --radius-xl: var(--md-sys-shape-corner-extra-large);
+  --radius-xl-inc: var(--md-sys-shape-corner-extra-large-increased);
+  --radius-2xl: var(--md-sys-shape-corner-extra-extra-large);
+
+  --shadow-elev-1: var(--md-sys-elevation-1);
+  --shadow-elev-2: var(--md-sys-elevation-2);
+  --shadow-elev-3: var(--md-sys-elevation-3);
+  --shadow-elev-4: var(--md-sys-elevation-4);
+  --shadow-elev-5: var(--md-sys-elevation-5);
+
+  --ease-standard: var(--md-sys-motion-easing-standard);
+  --ease-emphasized: var(--md-sys-motion-easing-emphasized-decelerate);
+  --ease-spring-fast: var(--md-sys-motion-spring-fast-spatial);
+  --ease-spring: var(--md-sys-motion-spring-default-spatial);
+
+  --font-sans: var(--font-google-sans-flex);
+  --font-mono: var(--font-google-sans-code);
+
+  /* M3 type scale: size / line-height / tracking / weight */
+  --text-display-large: 3.5625rem;
+  --text-display-large--line-height: 4rem;
+  --text-display-large--letter-spacing: -0.015625rem;
+  --text-display-large--font-weight: 400;
+  --text-display-medium: 2.8125rem;
+  --text-display-medium--line-height: 3.25rem;
+  --text-display-medium--letter-spacing: 0rem;
+  --text-display-medium--font-weight: 400;
+  --text-display-small: 2.25rem;
+  --text-display-small--line-height: 2.75rem;
+  --text-display-small--letter-spacing: 0rem;
+  --text-display-small--font-weight: 400;
+  --text-headline-large: 2rem;
+  --text-headline-large--line-height: 2.5rem;
+  --text-headline-large--letter-spacing: 0rem;
+  --text-headline-large--font-weight: 400;
+  --text-headline-medium: 1.75rem;
+  --text-headline-medium--line-height: 2.25rem;
+  --text-headline-medium--letter-spacing: 0rem;
+  --text-headline-medium--font-weight: 400;
+  --text-headline-small: 1.5rem;
+  --text-headline-small--line-height: 2rem;
+  --text-headline-small--letter-spacing: 0rem;
+  --text-headline-small--font-weight: 400;
+  --text-title-large: 1.375rem;
+  --text-title-large--line-height: 1.75rem;
+  --text-title-large--letter-spacing: 0rem;
+  --text-title-large--font-weight: 400;
+  --text-title-medium: 1rem;
+  --text-title-medium--line-height: 1.5rem;
+  --text-title-medium--letter-spacing: 0.009375rem;
+  --text-title-medium--font-weight: 500;
+  --text-title-small: 0.875rem;
+  --text-title-small--line-height: 1.25rem;
+  --text-title-small--letter-spacing: 0.00625rem;
+  --text-title-small--font-weight: 500;
+  --text-body-large: 1rem;
+  --text-body-large--line-height: 1.5rem;
+  --text-body-large--letter-spacing: 0.03125rem;
+  --text-body-large--font-weight: 400;
+  --text-body-medium: 0.875rem;
+  --text-body-medium--line-height: 1.25rem;
+  --text-body-medium--letter-spacing: 0.015625rem;
+  --text-body-medium--font-weight: 400;
+  --text-body-small: 0.75rem;
+  --text-body-small--line-height: 1rem;
+  --text-body-small--letter-spacing: 0.025rem;
+  --text-body-small--font-weight: 400;
+  --text-label-large: 0.875rem;
+  --text-label-large--line-height: 1.25rem;
+  --text-label-large--letter-spacing: 0.00625rem;
+  --text-label-large--font-weight: 500;
+  --text-label-medium: 0.75rem;
+  --text-label-medium--line-height: 1rem;
+  --text-label-medium--letter-spacing: 0.03125rem;
+  --text-label-medium--font-weight: 500;
+  --text-label-small: 0.6875rem;
+  --text-label-small--line-height: 1rem;
+  --text-label-small--letter-spacing: 0.03125rem;
+  --text-label-small--font-weight: 500;
+}
+
+/* ─────────────────────────────────── Base ─────────────────────────────────── */
+html,
+body {
+  background: var(--app-page);
+  color: var(--md-sys-color-on-surface);
+}
+
+body {
+  font-family: var(--font-google-sans-flex), "Roboto Flex", system-ui, sans-serif;
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Expressive emphasis: display and headline type use the rounded axis */
+.emphasized,
+[class*="text-display-"],
+[class*="text-headline-"] {
+  font-variation-settings: "ROND" 100;
+}
+
+::selection {
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--md-sys-color-outline-variant) transparent;
+}
+
+/* M3 focus indicator: 3px secondary ring, 2px offset. In the base layer so
+   components that draw their own indicator (text fields) can opt out. */
+@layer base {
+  :focus-visible {
+    outline: 3px solid var(--md-sys-color-secondary);
+    outline-offset: 2px;
+  }
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Material Symbols Rounded. FILL animates between outlined and filled; dark
+   surfaces get a lower grade so glyphs don't look heavier than on light. */
+@layer components {
+  .icon {
+    --icon-fill: 0;
+    --icon-wght: 400;
+    --icon-grad: 0;
+    font-family: "Material Symbols Rounded";
+    font-weight: normal;
+    font-style: normal;
+    font-size: 24px;
+    line-height: 1;
+    width: 1em;
+    height: 1em;
+    display: inline-block;
+    flex-shrink: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    letter-spacing: normal;
+    text-transform: none;
+    direction: ltr;
+    user-select: none;
+    font-feature-settings: "liga";
+    -webkit-font-smoothing: antialiased;
+    font-variation-settings:
+      "FILL" var(--icon-fill),
+      "wght" var(--icon-wght),
+      "GRAD" var(--icon-grad),
+      "opsz" 24;
+    transition: font-variation-settings var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+  }
+  .icon[data-filled] {
+    --icon-fill: 1;
+  }
+  :root[data-theme="dark"] .icon {
+    --icon-grad: -25;
+  }
+}
+
+/* ─────────────────────────────── Interaction ─────────────────────────────── */
+
+/* State layer: an overlay in the content color at the M3 state opacities */
+.state-layer {
+  position: relative;
+  isolation: isolate;
+}
+.state-layer::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
+  transition: opacity var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+@media (hover: hover) {
+  .state-layer:hover::before {
+    opacity: var(--md-sys-state-hover-opacity);
+  }
+}
+.state-layer:focus-visible::before {
+  opacity: var(--md-sys-state-focus-opacity);
+}
+.state-layer:active::before {
+  opacity: var(--md-sys-state-pressed-opacity);
+}
+.state-layer:disabled::before,
+.state-layer[aria-disabled="true"]::before {
+  opacity: 0;
+}
+
+/* Ink ripple, spawned by <Ripple /> at the pointer position */
+.m3-ripple {
+  position: absolute;
+  border-radius: 9999px;
+  background: currentColor;
+  pointer-events: none;
+  transform: scale(0);
+  opacity: 0.12;
+  animation: m3-ripple-grow 450ms var(--md-sys-motion-easing-standard) forwards;
+}
+.m3-ripple[data-released] {
+  animation:
+    m3-ripple-grow 450ms var(--md-sys-motion-easing-standard) forwards,
+    m3-ripple-fade 300ms 120ms linear forwards;
+}
+@keyframes m3-ripple-grow {
+  to {
+    transform: scale(1);
+  }
+}
+@keyframes m3-ripple-fade {
+  to {
+    opacity: 0;
+  }
+}
+
+/* Expressive shape morph: round buttons square up while pressed */
+.shape-morph {
+  transition:
+    border-radius var(--md-sys-motion-spring-fast-spatial-duration) var(--md-sys-motion-spring-fast-spatial),
+    background-color var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+    box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+    color var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+
+/* Cards: subtle elevation lift on hover */
+.card-lift {
+  transition:
+    box-shadow var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-standard),
+    transform var(--md-sys-motion-spring-default-spatial-duration) var(--md-sys-motion-spring-default-spatial);
+}
+@media (hover: hover) {
+  .card-lift:hover {
+    box-shadow: var(--md-sys-elevation-2);
+    transform: translateY(-2px);
+  }
+}
+
+/* ───────────────────────────────── Layout grid ───────────────────────────────── */
+.m3-pane {
+  padding-inline: var(--md-layout-margin);
+}
+.m3-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--md-layout-columns), minmax(0, 1fr));
+  gap: var(--md-layout-gutter);
+}
+
+/* ────────────────────────────────── Loading ────────────────────────────────── */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--md-sys-color-surface-container-high);
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, var(--md-sys-color-surface-container-highest), transparent);
+  animation: shimmer 1.6s infinite;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+.live-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: pulse-ring 1.8s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+}
+
+/* Expressive wavy progress indicator */
+@keyframes wave-travel {
+  to {
+    transform: translateX(-20px);
+  }
+}
+.wave-travel {
+  animation: wave-travel 0.9s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot::after,
+  .skeleton::after,
+  .wave-travel,
+  .m3-ripple {
+    animation: none;
+  }
+  .card-lift:hover {
+    transform: none;
+  }
+}

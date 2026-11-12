@@ -1,0 +1,47 @@
+# Local stand-in for the free-tier deployment: Postgres (Neon), Redis (Upstash),
+# and the combined web + worker container (Render).
+#
+#   docker compose up --build
+#   curl "http://localhost:8000/api/health/?worker=1"
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: fraudguard
+      POSTGRES_USER: fraudguard
+      POSTGRES_PASSWORD: fraudguard
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fraudguard -d fraudguard"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DEBUG: "False"
+      SECRET_KEY: local-compose-only-secret-not-for-deployment
+      ALLOWED_HOSTS: localhost,127.0.0.1
+      DATABASE_URL: postgres://fraudguard:fraudguard@postgres:5432/fraudguard
+      REDIS_URL: redis://redis:6379/0
+      CELERY_TASK_ALWAYS_EAGER: "False"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:
