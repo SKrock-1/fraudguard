@@ -115,6 +115,23 @@ class TestAlertReviewWorkflow:
         assert log.action == "alert_rejected"
         assert log.payload["decision"] == "rejected"
 
+    def test_decision_is_final(self, analyst_client, admin_client, pending_alert):
+        """A reviewed alert can't be flipped: 409, status unchanged, no second audit row."""
+        client, analyst = analyst_client
+        url = f"/api/alerts/{pending_alert.id}/review/"
+        assert client.post(url, {"decision": "rejected"}, format="json").status_code == status.HTTP_200_OK
+
+        other, _ = admin_client
+        response = other.post(url, {"decision": "approved"}, format="json")
+        assert response.status_code == status.HTTP_409_CONFLICT
+        assert "already reviewed" in response.data["detail"]
+        assert response.data["alert"]["status"] == Alert.Status.REJECTED
+
+        pending_alert.refresh_from_db()
+        assert pending_alert.status == Alert.Status.REJECTED
+        assert pending_alert.assigned_to == analyst
+        assert AuditLog.objects.filter(target=f"Alert:{pending_alert.id}").count() == 1
+
     def test_admin_can_review_alert(self, admin_client, pending_alert):
         client, admin = admin_client
         url = f"/api/alerts/{pending_alert.id}/review/"

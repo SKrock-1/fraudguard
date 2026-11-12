@@ -1,24 +1,30 @@
-# Render Blueprint: one free web service running Daphne + Celery (see start.sh).
-# Postgres comes from Neon and Redis from Upstash; set those URLs in the dashboard.
+# Render Blueprint: one free web service running Daphne + Celery (see start.sh),
+# plus a free Render Key Value (Redis-compatible) instance in the same region.
+# Postgres is Neon: paste its pooled and direct connection strings when Render asks.
 services:
   - type: web
     name: fraudguard
     runtime: docker
     plan: free
+    # Same AWS region as the Neon database (us-east-2) to keep query latency low
+    region: ohio
     healthCheckPath: /api/health/
     envVars:
       - key: DEBUG
         value: "False"
       - key: SECRET_KEY
         generateValue: true
-      - key: ALLOWED_HOSTS
-        sync: false
-      - key: CSRF_TRUSTED_ORIGINS
-        sync: false
+      # ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS default to Render's
+      # RENDER_EXTERNAL_HOSTNAME; add custom domains here if you use any.
       - key: DATABASE_URL
         sync: false
-      - key: REDIS_URL
+      - key: DATABASE_URL_UNPOOLED
         sync: false
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: fraudguard-kv
+          property: connectionString
       - key: CELERY_TASK_ALWAYS_EAGER
         value: "False"
       - key: CELERY_CONCURRENCY
@@ -26,10 +32,22 @@ services:
       - key: DB_CONN_MAX_AGE
         value: "60"
       # Demo deployment: seed demo users/data on first boot and enable the
-      # "Simulate traffic" button. Set DEMO_PASSWORD yourself in Render.
+      # "Simulate traffic" button. Render generates the demo password; read it
+      # from the service's Environment tab.
       - key: DEMO_TOOLS_ENABLED
         value: "True"
       - key: SEED_DEMO_ON_START
         value: "True"
       - key: DEMO_PASSWORD
-        sync: false
+        generateValue: true
+
+  # Celery broker, velocity counters and the WebSocket channel layer.
+  # Free Key Value is in-memory only, which suits this data: it is all short-lived.
+  - type: keyvalue
+    name: fraudguard-kv
+    plan: free
+    region: ohio
+    # Celery must not lose queued tasks to eviction
+    maxmemoryPolicy: noeviction
+    # Reachable only from Render services in this region (internal URL)
+    ipAllowList: []

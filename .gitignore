@@ -26,3 +26,4 @@ risk/ml_models/*.joblib.tmp
 
 # downloaded datasets
 data/
+.neon

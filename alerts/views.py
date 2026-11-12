@@ -79,11 +79,29 @@ class AlertReviewView(APIView):
 
         decision = serializer.validated_data["decision"]
         notes = serializer.validated_data.get("notes", "")
-
-        previous_status = alert.status
         new_status = Alert.Status.APPROVED if decision == "approved" else Alert.Status.REJECTED
 
         with db_transaction.atomic():
+            # A decision is final: lock the row so two analysts reviewing at the
+            # same moment cannot both succeed, then refuse anything not pending.
+            # of=("self",): lock only the alert row. Postgres refuses FOR UPDATE on the
+            # nullable side of the assigned_to outer join, and we don't need those rows locked.
+            alert = (
+                Alert.objects.select_for_update(of=("self",))
+                .select_related("transaction", "risk_score", "assigned_to")
+                .get(pk=alert.pk)
+            )
+            if alert.status != Alert.Status.PENDING:
+                reviewer = alert.assigned_to.username if alert.assigned_to else "another analyst"
+                return Response(
+                    {
+                        "detail": f"Alert #{alert.id} was already reviewed ({alert.status}) by {reviewer}.",
+                        "alert": AlertSerializer(alert).data,
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+            previous_status = alert.status
+
             # 1. Update Alert
             alert.status = new_status
             alert.assigned_to = request.user

@@ -12,7 +12,8 @@ SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-fraudguard-dev-secret-key-
 
 DEBUG = os.getenv("DEBUG", "True").lower() in ("true", "1", "yes")
 
-ALLOWED_HOSTS = [host.strip() for host in os.getenv("ALLOWED_HOSTS", "*").split(",") if host.strip()]
+# Any host in development; in production only what is configured (plus Render's hostname below)
+ALLOWED_HOSTS = [host.strip() for host in os.getenv("ALLOWED_HOSTS", "*" if DEBUG else "").split(",") if host.strip()]
 
 if not DEBUG and SECRET_KEY.startswith("django-insecure-"):
     from django.core.exceptions import ImproperlyConfigured
@@ -23,6 +24,17 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 CSRF_TRUSTED_ORIGINS = [
     origin.strip() for origin in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if origin.strip()
 ]
+
+# Render sets RENDER_EXTERNAL_HOSTNAME (e.g. fraudguard.onrender.com) on every web service
+RENDER_EXTERNAL_HOSTNAME = os.getenv("RENDER_EXTERNAL_HOSTNAME", "").strip()
+if "*" not in ALLOWED_HOSTS:
+    # In-container probes (Docker HEALTHCHECK) and the platform's internal hostname
+    for host in ("127.0.0.1", "localhost", RENDER_EXTERNAL_HOSTNAME, os.getenv("RENDER_INTERNAL_HOSTNAME", "").strip()):
+        if host and host not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(host)
+if RENDER_EXTERNAL_HOSTNAME:
+    if f"https://{RENDER_EXTERNAL_HOSTNAME}" not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(f"https://{RENDER_EXTERNAL_HOSTNAME}")
 
 if not DEBUG:
     SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "True").lower() in ("true", "1", "yes")
@@ -86,7 +98,20 @@ WSGI_APPLICATION = "fraudguard.wsgi.application"
 ASGI_APPLICATION = "fraudguard.asgi.application"
 
 # Database configuration
+# Neon provides two URLs for the same database: DATABASE_URL (pooled, PgBouncer in
+# transaction mode) for application traffic, and DATABASE_URL_UNPOOLED (direct) for
+# schema migrations and other session-level work. Django has one connection setting,
+# so management commands that change schema or need a session use the direct URL.
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+DATABASE_URL_UNPOOLED = os.getenv("DATABASE_URL_UNPOOLED", "").strip()
+_DIRECT_DB_COMMANDS = {"migrate", "makemigrations", "sqlmigrate", "showmigrations", "dbshell", "flush", "test"}
+_wants_direct_db = (
+    (len(sys.argv) > 1 and sys.argv[1] in _DIRECT_DB_COMMANDS)
+    or "pytest" in sys.modules
+    or os.getenv("DB_USE_DIRECT", "").lower() in ("true", "1", "yes")
+)
+if DATABASE_URL_UNPOOLED and _wants_direct_db:
+    DATABASE_URL = DATABASE_URL_UNPOOLED
 
 if DATABASE_URL:
     import urllib.parse
@@ -103,6 +128,12 @@ if DATABASE_URL:
             "OPTIONS": dict(urllib.parse.parse_qsl(parsed.query)),
             "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60")),
             "CONN_HEALTH_CHECKS": True,
+            # Neon's pooled endpoint (host "...-pooler...") is PgBouncer in transaction
+            # mode, where server-side cursors (used by QuerySet.iterator()) don't survive
+            # between statements. Disable them there; override with DB_SERVER_SIDE_CURSORS.
+            "DISABLE_SERVER_SIDE_CURSORS": os.getenv(
+                "DB_SERVER_SIDE_CURSORS", "false" if "-pooler" in (parsed.hostname or "") else "true"
+            ).lower() not in ("true", "1", "yes"),
         }
     }
 else:

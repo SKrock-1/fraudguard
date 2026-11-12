@@ -20,11 +20,13 @@ def forwards(apps, schema_editor):
             """
         )
     elif vendor == "postgresql":
+        # schema_editor.execute() runs this as a parameterised query, so the
+        # PL/pgSQL format placeholder must be written %% to reach Postgres as %.
         schema_editor.execute(
             """
             CREATE OR REPLACE FUNCTION audit_auditlog_insert_only() RETURNS trigger AS $$
             BEGIN
-                RAISE EXCEPTION 'AuditLog table is insert-only: % disallowed at database level', TG_OP;
+                RAISE EXCEPTION 'AuditLog table is insert-only: %% disallowed at database level', TG_OP;
             END;
             $$ LANGUAGE plpgsql;
             """
