@@ -9,3 +9,9 @@
 .claude/
 htmlcov/
 .coverage
+dashboard/
+data/
+benchmarks/
+.github/
+*.docx
+*.pdf

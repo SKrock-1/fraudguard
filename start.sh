@@ -10,6 +10,11 @@ set -euo pipefail
 
 python manage.py migrate --noinput
 
+# Free hosts have no shell, so a demo deployment seeds itself on first boot.
+if [ "${SEED_DEMO_ON_START:-False}" = "True" ]; then
+    python manage.py seed_demo --if-empty || echo "start.sh: demo seed failed; continuing" >&2
+fi
+
 celery -A fraudguard worker \
     --loglevel="${CELERY_LOG_LEVEL:-info}" \
     --concurrency="${CELERY_CONCURRENCY:-2}" &

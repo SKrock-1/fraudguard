@@ -41,6 +41,7 @@ class Command(BaseCommand):
         parser.add_argument("--fraud-rate", type=float, default=0.12)
         parser.add_argument("--reset", action="store_true", help="Delete existing transactions and accounts first")
         parser.add_argument("--seed", type=int, default=None, help="Random seed for reproducible data")
+        parser.add_argument("--if-empty", action="store_true", help="Do nothing (exit 0) if transactions already exist")
 
     def handle(self, *args, **opts):
         password = os.getenv("DEMO_PASSWORD", "").strip()
@@ -55,6 +56,9 @@ class Command(BaseCommand):
             Account.objects.all().delete()
             self.stdout.write("Cleared transactions and accounts.")
         elif Transaction.objects.exists():
+            if opts["if_empty"]:
+                self.stdout.write("Transactions already exist; skipping demo seed.")
+                return
             raise CommandError("Transactions already exist; pass --reset to reseed.")
 
         users = self._ensure_users(password)

@@ -45,19 +45,44 @@ This starts Postgres, Redis, and one app container that runs both Daphne and a
 Celery worker via [start.sh](start.sh). `?worker=1` makes the health check ping
 the worker too, so a 200 means web, database, Redis and worker are all up.
 
+## Model retraining and evaluation
+
+Analyst decisions are training labels. `retrain_model` fits a challenger
+Isolation Forest on legitimate traffic, compares it with the production model
+(champion) on a stratified holdout of labelled alerts, and promotes it only if
+its average precision is at least as good. Promoted models are stored in the
+database, so they survive restarts on hosts with ephemeral disks, and running
+workers pick them up within 30 seconds.
+
+```bash
+uv run python manage.py retrain_model --dry-run   # evaluate only
+uv run python manage.py retrain_model             # promote if it wins
+```
+
+Admins can also retrain from the dashboard's **Models** page (or
+`POST /api/ml/retrain/`), and [a weekly GitHub Actions job](.github/workflows/retrain.yml)
+calls the same endpoint on the deployed API. The Models page shows precision,
+recall and F1 for every alert threshold, on analyst labels or the synthetic set.
+
+```bash
+uv run python scripts/backtest.py                    # synthetic backtest
+uv run python scripts/benchmark_public_dataset.py    # real ULB credit-card data
+```
+
+Results on the public dataset are in [benchmarks/](benchmarks/README.md).
+
 ## Deployment (free tier)
+
+Step-by-step instructions for Neon, Upstash, Render and Vercel are in
+[DEPLOY.md](DEPLOY.md).
 
 | Piece | Provider |
 |---|---|
 | Web + Celery worker (one container) | Render free web service ([render.yaml](render.yaml)) |
 | Postgres | Neon |
 | Redis | Upstash (`rediss://` URL) |
-
-1. Create a Neon database and an Upstash Redis instance.
-2. In Render, create a Blueprint from this repo (it reads `render.yaml`).
-3. Set `DATABASE_URL`, `REDIS_URL`, `ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS`
-   in the service's environment. See [.env.example](.env.example) for formats.
-4. Render runs migrations on every start and health-checks `/api/health/`.
+| Dashboard | Vercel |
+| CI and weekly retrain | GitHub Actions |
 
 **Free-tier tradeoff:** the worker shares a container with the web server because
 Render's free plan has no background-worker service type. If either process

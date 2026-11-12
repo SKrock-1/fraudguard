@@ -24,6 +24,17 @@ CSRF_TRUSTED_ORIGINS = [
     origin.strip() for origin in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if origin.strip()
 ]
 
+if not DEBUG:
+    SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "True").lower() in ("true", "1", "yes")
+    # The platform's health probe talks plain HTTP to the container
+    SECURE_REDIRECT_EXEMPT = [r"^api/health/$"]
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    # Short by default: raise it once HTTPS is confirmed working end to end
+    SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "3600"))
+    # Shared platform domains (*.onrender.com) must not claim subdomains or preload
+    SILENCED_SYSTEM_CHECKS = ["security.W005", "security.W021"]
+
 INSTALLED_APPS = [
     *(["daphne"] if "pytest" not in sys.modules and "test" not in sys.argv else []),
     "django.contrib.admin",

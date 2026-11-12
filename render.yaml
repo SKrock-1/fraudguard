@@ -23,3 +23,13 @@ services:
         value: "False"
       - key: CELERY_CONCURRENCY
         value: "1"
+      - key: DB_CONN_MAX_AGE
+        value: "60"
+      # Demo deployment: seed demo users/data on first boot and enable the
+      # "Simulate traffic" button. Set DEMO_PASSWORD yourself in Render.
+      - key: DEMO_TOOLS_ENABLED
+        value: "True"
+      - key: SEED_DEMO_ON_START
+        value: "True"
+      - key: DEMO_PASSWORD
+        sync: false
