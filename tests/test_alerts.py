@@ -87,6 +87,11 @@ def create_low_risk_transaction():
     return txn
 
 
+# The first connect opens a DB connection for the JWT user lookup; against a remote
+# Postgres (e.g. Neon) that takes longer than the 1-second default.
+WS_TIMEOUT = 10
+
+
 @sync_to_async
 def execute_score_transaction(txn_id: int):
     return score_transaction(txn_id)
@@ -99,26 +104,26 @@ class TestAlertConsumerAuthentication:
     async def test_analyst_can_connect_with_jwt_token(self, analyst_token):
         token, user = analyst_token
         communicator = WebsocketCommunicator(application, f"/ws/alerts/?token={token}")
-        connected, subprotocol = await communicator.connect()
+        connected, subprotocol = await communicator.connect(timeout=WS_TIMEOUT)
         assert connected is True
         await communicator.disconnect()
 
     async def test_admin_can_connect_with_jwt_token(self, admin_token):
         token, user = admin_token
         communicator = WebsocketCommunicator(application, f"/ws/alerts/?token={token}")
-        connected, subprotocol = await communicator.connect()
+        connected, subprotocol = await communicator.connect(timeout=WS_TIMEOUT)
         assert connected is True
         await communicator.disconnect()
 
     async def test_unauthenticated_connection_rejected(self):
         communicator = WebsocketCommunicator(application, "/ws/alerts/")
-        connected, subprotocol = await communicator.connect()
+        connected, subprotocol = await communicator.connect(timeout=WS_TIMEOUT)
         assert connected is False
 
     async def test_ingestion_client_role_rejected(self, ingestion_token):
         token, user = ingestion_token
         communicator = WebsocketCommunicator(application, f"/ws/alerts/?token={token}")
-        connected, subprotocol = await communicator.connect()
+        connected, subprotocol = await communicator.connect(timeout=WS_TIMEOUT)
         assert connected is False
 
 
@@ -136,7 +141,7 @@ class TestRealTimeAlertBroadcasting:
 
         # 1. Connect analyst consumer to the WebSocket stream
         communicator = WebsocketCommunicator(application, f"/ws/alerts/?token={token}")
-        connected, _ = await communicator.connect()
+        connected, _ = await communicator.connect(timeout=WS_TIMEOUT)
         assert connected is True
 
         # 2. Setup high-risk transaction: NYC -> London in 5 minutes + 500x average spend
@@ -171,7 +176,7 @@ class TestRealTimeAlertBroadcasting:
         token, analyst = analyst_token
 
         communicator = WebsocketCommunicator(application, f"/ws/alerts/?token={token}")
-        connected, _ = await communicator.connect()
+        connected, _ = await communicator.connect(timeout=WS_TIMEOUT)
         assert connected is True
 
         # Benign transaction: normal amount, normal location

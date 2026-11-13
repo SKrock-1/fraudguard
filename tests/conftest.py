@@ -67,3 +67,31 @@ def auth_admin_client(api_client, admin_user):
 @pytest.fixture
 def test_account(ingestion_client_user):
     return AccountFactory(user=ingestion_client_user, account_number="ACC_TEST_001")
+
+
+
+def _set_audit_triggers(enabled: bool):
+    from django.db import connection
+    with connection.cursor() as c:
+        c.execute(f"ALTER TABLE audit_auditlog {'ENABLE' if enabled else 'DISABLE'} TRIGGER USER")
+
+
+@pytest.fixture(autouse=True)
+def _audit_triggers_on_postgres(request, enable_db_access_for_all_tests):
+    """
+    `transaction=True` tests reset the database with TRUNCATE afterwards, which the
+    audit table's insert-only trigger (rightly) refuses on Postgres. So, in the
+    throwaway test database only: triggers are switched on at the start of every
+    test, and off in a transactional test's teardown, which runs just before
+    pytest-django's flush (this fixture depends on the db fixtures, so it is torn
+    down first). No-op on SQLite.
+    """
+    from django.db import connection
+    if connection.vendor != "postgresql":
+        yield
+        return
+    _set_audit_triggers(True)
+    yield
+    marker = request.node.get_closest_marker("django_db")
+    if marker and marker.kwargs.get("transaction"):
+        _set_audit_triggers(False)

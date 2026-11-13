@@ -71,6 +71,18 @@ Repository **Settings → Secrets and variables → Actions → New repository s
 Run **Actions → Weekly model retrain → Run workflow** once to check it. Without
 the secrets the job skips itself instead of failing.
 
+## Troubleshooting: incomplete demo data
+
+On the free instance the first-boot seed can be cut short before it finishes
+(the seed scores about 670 transactions while the 512 MB container is starting).
+Boots after that skip seeding because the database is no longer empty. To reseed
+from your machine without changing the demo passwords Render generated:
+
+```bash
+# .env must hold the production DATABASE_URL / DATABASE_URL_UNPOOLED from `neon env pull`
+REDIS_URL=fakeredis:// CHANNEL_LAYERS_BACKEND=inmemory DEMO_PASSWORD=unused   uv run python manage.py seed_demo --reset --keep-passwords
+```
+
 ## Free-tier trade-offs
 
 - Daphne and the Celery worker share one container because Render's free plan has

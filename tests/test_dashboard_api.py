@@ -114,8 +114,12 @@ class TestSimulateTraffic:
         resp = _client(User.Role.INGESTION_CLIENT).post("/api/demo/simulate/", {}, format="json")
         assert resp.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_run_live_stream_creates_and_scores(self, fake_redis):
+    def test_run_live_stream_creates_and_scores(self, fake_redis, monkeypatch):
         from risk import simulator
+        # In production this runs on its own thread, where recycling connections is
+        # right; inline inside the test's transaction it would close the test's own
+        # connection once it is older than CONN_MAX_AGE (slow runs against Postgres).
+        monkeypatch.setattr(simulator, "close_old_connections", lambda: None)
         AccountFactory()
         simulator.run_live_stream(count=3, fraud_rate=0.0, duration_seconds=0.01)
         assert Transaction.objects.count() == 3
@@ -162,3 +166,15 @@ class TestAuditLogList:
     def test_ingestion_client_denied(self):
         resp = _client(User.Role.INGESTION_CLIENT).get("/api/audit/")
         assert resp.status_code == status.HTTP_403_FORBIDDEN
+
+
+def test_seed_keep_passwords_leaves_existing_logins(fake_redis, monkeypatch):
+    from accounts.factories import UserFactory
+    existing = UserFactory(username="maya.chen", role=User.Role.ANALYST)
+    existing.set_password("set-by-render")
+    existing.save()
+    monkeypatch.setenv("DEMO_PASSWORD", "local-throwaway")
+    call_command("seed_demo", "--accounts", "3", "--events", "10", "--keep-passwords", "--seed", "3")
+    existing.refresh_from_db()
+    assert existing.check_password("set-by-render")
+    assert User.objects.get(username="dev.patel").check_password("local-throwaway")  # newly created

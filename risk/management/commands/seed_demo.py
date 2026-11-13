@@ -42,6 +42,10 @@ class Command(BaseCommand):
         parser.add_argument("--reset", action="store_true", help="Delete existing transactions and accounts first")
         parser.add_argument("--seed", type=int, default=None, help="Random seed for reproducible data")
         parser.add_argument("--if-empty", action="store_true", help="Do nothing (exit 0) if transactions already exist")
+        parser.add_argument(
+            "--keep-passwords", action="store_true",
+            help="Leave passwords of existing demo users unchanged (e.g. when reseeding a deployment from elsewhere)",
+        )
 
     def handle(self, *args, **opts):
         password = os.getenv("DEMO_PASSWORD", "").strip()
@@ -61,7 +65,7 @@ class Command(BaseCommand):
                 return
             raise CommandError("Transactions already exist; pass --reset to reseed.")
 
-        users = self._ensure_users(password)
+        users = self._ensure_users(password, keep_passwords=opts["keep_passwords"])
         accounts = self._create_accounts(opts["accounts"])
         fraud_txn_ids = self._backfill(accounts, opts["events"], opts["fraud_rate"])
         self._resolve_history(fraud_txn_ids, [u for u in users if u.role == User.Role.ANALYST])
@@ -72,14 +76,15 @@ class Command(BaseCommand):
             f"Demo logins: {', '.join(u.username for u in users)}"
         ))
 
-    def _ensure_users(self, password):
+    def _ensure_users(self, password, keep_passwords=False):
         users = []
         for username, role, first, last in DEMO_USERS:
-            user, _ = User.objects.get_or_create(username=username)
+            user, created = User.objects.get_or_create(username=username)
             user.role, user.first_name, user.last_name = role, first, last
             user.email = f"{username.replace('-', '.')}@fraudguard.test"
             user.is_staff = role == User.Role.ADMIN
-            user.set_password(password)
+            if created or not keep_passwords:
+                user.set_password(password)
             user.save()
             users.append(user)
         return users
