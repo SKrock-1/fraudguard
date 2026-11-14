@@ -20,7 +20,7 @@ def health(request):
     GET /api/health/ — liveness probe for Render / UptimeRobot / docker compose.
 
     Checks the database and Redis. Pass ?worker=1 to also ping the Celery
-    worker (slower, ~1s; skipped when tasks run eagerly). Returns 503 if any
+    worker (slower, up to HEALTH_WORKER_PING_TIMEOUT; skipped when tasks run eagerly). Returns 503 if any
     check fails so the platform treats the instance as unhealthy.
     """
     checks = {}
@@ -46,7 +46,8 @@ def health(request):
         else:
             from fraudguard.celery import app as celery_app
             try:
-                replies = celery_app.control.ping(timeout=1.0)
+                # Free instances get a fraction of a CPU; a 1 s ping flaps there
+                replies = celery_app.control.ping(timeout=settings.HEALTH_WORKER_PING_TIMEOUT)
                 checks["worker"] = "ok" if replies else "error"
             except Exception as exc:
                 logger.error("Health check: celery ping failed: %s", exc)

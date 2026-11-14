@@ -203,6 +203,8 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "UTC"
 CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "True").lower() in ("true", "1", "yes")
 CELERY_TASK_EAGER_PROPAGATES = True
+# Seconds /api/health/?worker=1 waits for a Celery ping reply
+HEALTH_WORKER_PING_TIMEOUT = float(os.getenv("HEALTH_WORKER_PING_TIMEOUT", "3"))
 
 # Upstash (and other managed Redis) only accepts TLS, via rediss:// URLs.
 # Celery refuses a rediss:// broker unless SSL options are given explicitly.
