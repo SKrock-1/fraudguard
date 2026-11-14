@@ -57,6 +57,7 @@ class ModelVersionListView(APIView):
 
     def get(self, request):
         import risk.tasks as tasks
+        tasks.refresh_model()
         runs = ModelVersion.objects.select_related("created_by")[:20]
         return Response({
             "production_version": tasks.ML_MODEL_VERSION if tasks.ML_MODEL is not None else None,

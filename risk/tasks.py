@@ -8,13 +8,25 @@ from risk.ml import extract_features, load_bundle, ml_score
 
 logger = logging.getLogger(__name__)
 
-# Loaded once at process start (module-level, not inside the task function).
-# Retrained models are stored in the database; refresh_model() picks up a newer
-# promoted one (or a replaced baseline file) at most every 30 seconds.
-_BUNDLE = load_bundle()
-ML_MODEL = _BUNDLE["model"] if _BUNDLE else None
-ML_MODEL_VERSION = (_BUNDLE or {}).get("model_version", "isolation_forest_v1")
+# Loaded once per process on first use (ensure_model), not at import: the web
+# process imports this module to enqueue tasks, and only the worker needs the
+# model. Retrained models are stored in the database; refresh_model() picks up
+# a newer promoted one (or a replaced baseline file) at most every 30 seconds.
+_UNLOADED = object()
+ML_MODEL = _UNLOADED
+ML_MODEL_VERSION = "isolation_forest_v1"
 _MODEL_FILE_STATE = {"key": None, "checked_at": 0.0}
+
+
+def ensure_model():
+    """Load the baseline model the first time it is needed in this process."""
+    global ML_MODEL, ML_MODEL_VERSION
+    if ML_MODEL is _UNLOADED:
+        bundle = load_bundle()
+        ML_MODEL = bundle["model"] if bundle else None
+        ML_MODEL_VERSION = (bundle or {}).get("model_version", "isolation_forest_v1")
+        _MODEL_FILE_STATE["key"] = _model_file_key()
+    return ML_MODEL
 MODEL_RECHECK_SECONDS = 30.0
 
 
@@ -61,6 +73,7 @@ def refresh_model(force=False):
     1. a newer promoted model in the database (from retraining) wins;
     2. otherwise reload the baseline file if it changed on disk.
     """
+    ensure_model()
     now = time.monotonic()
     if not force and now - _MODEL_FILE_STATE["checked_at"] < MODEL_RECHECK_SECONDS:
         return

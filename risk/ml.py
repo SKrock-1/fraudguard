@@ -156,7 +156,7 @@ def ml_score(transaction, account=None, model: Any = None) -> float:
     Calculate the ML anomaly risk score for a transaction.
     Returns float in [0.0, 1.0].
     """
-    active_model = model if model is not None else ML_MODEL
+    active_model = model if model is not None else default_model()
     if active_model is None:
         return 0.0
 
@@ -164,5 +164,15 @@ def ml_score(transaction, account=None, model: Any = None) -> float:
     return round(compute_ml_score(active_model, features), 4)
 
 
-# Loaded once at process start (module-level) as required by PRD
-ML_MODEL = load_model()
+# Loaded once per process, on first use rather than at import: the web process
+# imports this module only to enqueue scoring, and loading scikit-learn and the
+# model there would cost ~100 MB on a 512 MB free instance.
+_UNSET = object()
+_DEFAULT_MODEL: Any = _UNSET
+
+
+def default_model() -> Any:
+    global _DEFAULT_MODEL
+    if _DEFAULT_MODEL is _UNSET:
+        _DEFAULT_MODEL = load_model()
+    return _DEFAULT_MODEL

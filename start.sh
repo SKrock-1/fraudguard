@@ -15,9 +15,14 @@ if [ "${SEED_DEMO_ON_START:-False}" = "True" ]; then
     python manage.py seed_demo --if-empty || echo "start.sh: demo seed failed; continuing" >&2
 fi
 
+# --pool=solo runs tasks in the worker's own process. The default prefork pool
+# adds a child process that loads the whole Django/scikit-learn stack again,
+# which pushed the 512 MB free instance over its memory limit.
 celery -A fraudguard worker \
     --loglevel="${CELERY_LOG_LEVEL:-info}" \
-    --concurrency="${CELERY_CONCURRENCY:-2}" &
+    --pool="${CELERY_POOL:-solo}" \
+    --concurrency="${CELERY_CONCURRENCY:-1}" \
+    --without-gossip --without-mingle &
 worker_pid=$!
 
 daphne -b 0.0.0.0 -p "${PORT:-8000}" fraudguard.asgi:application &
