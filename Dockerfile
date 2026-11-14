@@ -19,6 +19,9 @@ COPY . .
 # Strip CRLF in case the repo was checked out on Windows
 RUN sed -i 's/\r$//' start.sh && chmod +x start.sh
 
+# Admin CSS/JS for WhiteNoise; no secrets or database needed at build time
+RUN DEBUG=False SECRET_KEY=collectstatic-only python manage.py collectstatic --noinput
+
 # Celery warns loudly when run as root
 RUN useradd --create-home --uid 1000 app && chown -R app /app
 USER app
